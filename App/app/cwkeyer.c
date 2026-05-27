@@ -53,6 +53,13 @@
 #define TICKS_PER_MS 1
 #define TICKS_PER_MINUTE (60 * 1000 * TICKS_PER_MS)  // 60,000
 
+// UART-safe grace window: how long after boot we refuse to ground PA10
+// (the paddle "port ground" output) even when the user has selected a
+// PORT_GROUND keyer input mode. PA10 is also USART1_RX, so grounding it
+// makes the radio unprogrammable. The user gets this many ms after boot
+// to start a programming session; after that the keyer takes over.
+#define UART_SAFE_GRACE_MS 5000
+
 // Keyer FSM states
 typedef enum {
     CWK_STATE_IDLE = 0,
@@ -205,6 +212,19 @@ static void CW_KeyerInit()
 
     bool uses_port_ground = (key_input_mode & CW_KEY_FLAG_PORT_GROUND) != 0;
     bool uses_port_ring   = (key_input_mode & CW_KEY_FLAG_PORT_RING) != 0;
+
+    // PA10 is shared between USART1_RX and the paddle "port ground" output
+    // line. Once we drive PA10 low, host programming over USB-serial is
+    // impossible until power-cycle. Defer the takeover for the first
+    // UART_SAFE_GRACE_MS after boot so a host has a chance to open a
+    // programming session. The paddle is inert during the window; CW
+    // operators see a few seconds of unresponsive paddle on cold boot,
+    // then it activates normally. s_cfg_dirty + leaving s_last_key_input_mode
+    // unchanged ensures CW_HandleState retries until the window expires.
+    if (uses_port_ground && millis() < UART_SAFE_GRACE_MS) {
+        s_cfg_dirty = true;
+        return;
+    }
 
     CW_ConfigurePortRing(uses_port_ring);
     if (uses_port_ground)

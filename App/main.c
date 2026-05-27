@@ -184,6 +184,10 @@ void Main(void)
         gMenuListCount++;
     }
 
+    // Snapshot the held key BEFORE the release-wait loop wipes the state,
+    // so boot-mode overrides below can react to "hold KEY at power-on".
+    KEY_Code_t boot_held_key = KEYBOARD_Poll();
+
     // wait for user to release all butts before moving on
     if (GPIO_IsPttPressed() ||
          KEYBOARD_Poll() != KEY_INVALID ||
@@ -204,6 +208,18 @@ void Main(void)
     }
 
 #ifdef ENABLE_CW_MODULATOR
+	// UART-safe boot override: holding SIDE2 alone (no PTT) at power-on
+	// forces CW_KEY_INPUT to HANDKEY for this session only — no EEPROM
+	// write. Use this when the keyer is configured with a TRS-jack input
+	// and you need to program the radio (PA10 = USART1_RX = paddle ground
+	// line; once the keyer claims PA10, programming is impossible until
+	// power-cycle). PTT+SIDE2 still routes to BOOT_MODE_AIRCOPY upstream.
+	if (!gF_LOCK && boot_held_key == KEY_SIDE2) {
+		gEeprom.CW_KEY_INPUT = CW_KEY_INPUT_HANDKEY;
+		gEeprom.CW_KEY_INPUT_MENU = 0;
+		// Deliberately NOT calling SETTINGS_SaveSettings(): session-only.
+	}
+
 	// Check CW keyer inputs at startup - if stuck, fall back to handkey mode
 	if (!gF_LOCK && !CW_CheckKeyerInputs(gEeprom.CW_KEY_INPUT)) {
 		gEeprom.CW_KEY_INPUT = CW_KEY_INPUT_HANDKEY;
