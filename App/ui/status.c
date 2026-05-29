@@ -35,6 +35,10 @@
 #include "ui/ui.h"
 #include "ui/status.h"
 
+#ifdef ENABLE_USB
+#include "driver/vcp.h"
+#endif
+
 #ifdef ENABLE_FEAT_F4HWN_RX_TX_TIMER
 #ifndef ENABLE_FEAT_F4HWN_DEBUG
 static void convertTime(uint8_t *line, uint8_t type) 
@@ -212,7 +216,11 @@ void UI_DisplayStatus()
     } else
     #endif
     #ifdef ENABLE_VOX
+    #ifdef ENABLE_CW_MODULATOR
     if (gEeprom.VOX_SWITCH && gRxVfo->Modulation != MODULATION_CW) {
+    #else
+    if (gEeprom.VOX_SWITCH) {
+    #endif
         memcpy(line + x, gFontVox, sizeof(gFontVox));
         x1 = x + sizeof(gFontVox) + 1;
     }
@@ -241,6 +249,22 @@ void UI_DisplayStatus()
     const void *src = NULL;   // Pointer to the font/bitmap to copy
     size_t size = 0;          // Size of the font/bitmap
 
+#ifdef ENABLE_USB
+    // USB enumeration indicator overrides the rest of this priority slot.
+    // It's the loudest diagnostic signal we have: if you plug in USB-C and
+    // "USB" never appears, the host never enumerated the device — cable,
+    // port wiring, or descriptor problem. Inverted when DTR is asserted
+    // (a host program has the CDC port open).
+    if (VCP_IsHostConfigured()) {
+        GUI_DisplaySmallest("USB", x + 1, 1, true, true);
+        if (VCP_IsHostPortOpen()) {
+            for (uint8_t inv = x; inv < x + 14 && inv < LCD_WIDTH; inv++) {
+                gStatusLine[inv] ^= 0x7F;
+            }
+        }
+    }
+    else
+#endif
     // Determine the source and size based on conditions
     if (gEeprom.KEY_LOCK) {
         src = gFontKeyLock;

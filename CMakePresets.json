@@ -46,6 +46,7 @@
                 "ENABLE_SCAN_RANGES": true,
                 "ENABLE_REGA": false,
                 "ENABLE_EXTRA_UART_CMD": false,
+                "ENABLE_CAT_CONTROL": false,
                 "ENABLE_FEAT_F4HWN": true,
                 "ENABLE_FEAT_F4HWN_GAME": false,
                 "ENABLE_FEAT_F4HWN_SCREENSHOT": false,
@@ -203,6 +204,9 @@
                 "ENABLE_FEAT_F4HWN_MEM": true,
                 "ENABLE_FEAT_F4HWN_LOGO": true,
                 "ENABLE_SWD": true,
+                "ENABLE_EXTRA_UART_CMD": true,
+                "ENABLE_UART_RW_BK_REGS": true,
+                "ENABLE_CAT_CONTROL": true,
                 "EDITION_STRING": "Fusion",
                 "TARGET": "f4hwn.fusion"
             }

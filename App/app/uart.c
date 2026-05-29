@@ -638,6 +638,107 @@ static void CMD_0602_WriteBK4819Reg(const uint8_t *pBuffer)
 }
 #endif
 
+#ifdef ENABLE_CAT_CONTROL
+// CMD 0x0603: set live VFO frequency and immediately retune.
+// Payload: uint8 vfo (0|1), uint32 frequency in units of 10 Hz
+static void CMD_0603_SetVfoFreq(uint32_t Port, const uint8_t *pBuffer)
+{
+    typedef struct __attribute__((__packed__)) {
+        Header_t header;
+        uint8_t  vfo;
+        uint32_t freq;
+    } CMD_0603_t;
+
+    struct __attribute__((__packed__)) {
+        Header_t header;
+        uint8_t  result;
+    } reply;
+
+    const CMD_0603_t *cmd = (const CMD_0603_t *)pBuffer;
+    reply.header.ID   = 0x0603;
+    reply.header.Size = sizeof(reply) - sizeof(Header_t);
+
+    if (cmd->vfo > 1) {
+        reply.result = 1;
+        SendReply(Port, &reply, sizeof(reply));
+        return;
+    }
+
+    gEeprom.VfoInfo[cmd->vfo].freq_config_RX.Frequency = cmd->freq;
+    gEeprom.VfoInfo[cmd->vfo].freq_config_TX.Frequency = cmd->freq;
+
+    RADIO_ConfigureChannel(cmd->vfo, VFO_CONFIGURE);
+    RADIO_SetupRegisters(true);
+
+    reply.result = 0;
+    SendReply(Port, &reply, sizeof(reply));
+}
+
+// CMD 0x0604: read live VFO frequency / modulation / bandwidth.
+// Payload: uint8 vfo
+static void CMD_0604_GetVfoFreq(uint32_t Port, const uint8_t *pBuffer)
+{
+    typedef struct __attribute__((__packed__)) {
+        Header_t header;
+        uint8_t  vfo;
+    } CMD_0604_t;
+
+    struct __attribute__((__packed__)) {
+        Header_t header;
+        uint8_t  vfo;
+        uint8_t  modulation;
+        uint8_t  bandwidth;
+        uint8_t  padding;
+        uint32_t freq_rx;
+        uint32_t freq_tx;
+    } reply;
+
+    const CMD_0604_t *cmd = (const CMD_0604_t *)pBuffer;
+    reply.header.ID   = 0x0604;
+    reply.header.Size = sizeof(reply) - sizeof(Header_t);
+
+    uint8_t v = cmd->vfo & 1;
+    reply.vfo        = v;
+    reply.modulation = gEeprom.VfoInfo[v].Modulation;
+    reply.bandwidth  = gEeprom.VfoInfo[v].CHANNEL_BANDWIDTH;
+    reply.padding    = 0;
+    reply.freq_rx    = gEeprom.VfoInfo[v].freq_config_RX.Frequency;
+    reply.freq_tx    = gEeprom.VfoInfo[v].freq_config_TX.Frequency;
+
+    SendReply(Port, &reply, sizeof(reply));
+}
+
+// CMD 0x0605: PTT toggle. Wraps the firmware's TX path so state stays consistent.
+// Payload: uint8 ptt (0 = release, 1 = key down)
+static void CMD_0605_Ptt(uint32_t Port, const uint8_t *pBuffer)
+{
+    typedef struct __attribute__((__packed__)) {
+        Header_t header;
+        uint8_t  ptt;
+    } CMD_0605_t;
+
+    struct __attribute__((__packed__)) {
+        Header_t header;
+        uint8_t  state;
+    } reply;
+
+    const CMD_0605_t *cmd = (const CMD_0605_t *)pBuffer;
+    reply.header.ID   = 0x0605;
+    reply.header.Size = sizeof(reply) - sizeof(Header_t);
+
+    if (cmd->ptt) {
+        RADIO_PrepareTX();
+        FUNCTION_Select(FUNCTION_TRANSMIT);
+    } else {
+        FUNCTION_Select(FUNCTION_FOREGROUND);
+        RADIO_SetupRegisters(true);
+    }
+
+    reply.state = cmd->ptt ? 1 : 0;
+    SendReply(Port, &reply, sizeof(reply));
+}
+#endif // ENABLE_CAT_CONTROL
+
 bool UART_IsCommandAvailable(uint32_t Port)
 {
     uint16_t Index;
@@ -856,9 +957,23 @@ void UART_HandleCommand(uint32_t Port)
         case 0x0601:
             CMD_0601_ReadBK4819Reg(Port, pUART_Command->Buffer);
             break;
-        
+
         case 0x0602:
             CMD_0602_WriteBK4819Reg(pUART_Command->Buffer);
+            break;
+#endif
+
+#ifdef ENABLE_CAT_CONTROL
+        case 0x0603:
+            CMD_0603_SetVfoFreq(Port, pUART_Command->Buffer);
+            break;
+
+        case 0x0604:
+            CMD_0604_GetVfoFreq(Port, pUART_Command->Buffer);
+            break;
+
+        case 0x0605:
+            CMD_0605_Ptt(Port, pUART_Command->Buffer);
             break;
 #endif
     } // switch

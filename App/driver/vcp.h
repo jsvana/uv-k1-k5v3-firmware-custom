@@ -27,6 +27,30 @@
 extern uint8_t VCP_RxBuf[VCP_RX_BUF_SIZE];
 extern volatile uint32_t VCP_RxBufPointer;
 
+// VCP state (defined in App/usb/usbd_cdc_if.c). Both are .bss-resident and
+// deterministically zero at boot. We track our own configured flag rather
+// than calling usb_device_is_configured() because CherryUSB's core state
+// struct lives in .noncacheable, which historically had nondeterministic
+// initial values.
+extern volatile bool vcp_host_configured;
+extern volatile uint8_t dtr_enable;
+
+// True once the USB host has completed CDC enumeration (set by our
+// usbd_configure_done_callback, cleared on RESET/DISCONNECT/SUSPEND
+// by our notify_handler).
+static inline bool VCP_IsHostConfigured(void)
+{
+    return vcp_host_configured;
+}
+
+// True when a host application has opened the CDC port (DTR asserted).
+// Stronger signal than VCP_IsHostConfigured(): the host enumerated AND
+// a userspace program (e.g. screen, our CAT client) has the port open.
+static inline bool VCP_IsHostPortOpen(void)
+{
+    return dtr_enable != 0;
+}
+
 void VCP_Init();
 
 #ifdef ENABLE_FEAT_F4HWN_SCREENSHOT

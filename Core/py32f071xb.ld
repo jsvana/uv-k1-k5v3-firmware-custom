@@ -133,8 +133,15 @@ SECTIONS
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
 
-  /* Initialized data sections goes into RAM, load LMA copy after code */
-  .data : 
+  /* Initialized data sections goes into RAM, load LMA copy after code.
+   * _edata is intentionally placed after .noncacheable below so the startup
+   * copy loop (_sdata..._edata from _sidata) also initializes the
+   * .noncacheable section. Without this, CherryUSB's usbd_core_cfg struct
+   * starts with garbage in SRAM and usb_device_is_configured() returns
+   * non-deterministic values at boot. .data and .noncacheable are
+   * contiguous in both RAM and FLASH, so one copy covers both.
+   */
+  .data :
   {
     . = ALIGN(4);
     _sdata = .;        /* create a global symbol at data start */
@@ -142,7 +149,6 @@ SECTIONS
     *(.data*)          /* .data* sections */
 
     . = ALIGN(4);
-    _edata = .;        /* define a global symbol at data end */
   } >RAM AT> FLASH
 
   /* Explicit placement of .noncacheable (CherryUSB) + end-of-FLASH symbol */
@@ -152,6 +158,7 @@ SECTIONS
     *(.noncacheable)
     *(.noncacheable*)
     . = ALIGN(4);
+    _edata = .;        /* define a global symbol at data end */
   } >RAM AT> FLASH
   _eflash_used = LOADADDR(.noncacheable) + SIZEOF(.noncacheable);
   

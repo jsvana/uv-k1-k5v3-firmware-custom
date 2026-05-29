@@ -93,6 +93,15 @@ static cdc_acm_rx_buf_t client_rx_buf = {0};
 
 volatile bool ep_tx_busy_flag = false;
 
+// Mirrors usb_device_is_configured(), but lives in .bss (zero-initialized
+// at boot, deterministic). We set it from usbd_configure_done_callback —
+// which only fires when a real host issues SET_CONFIGURATION — and clear
+// it via the CDC class notify hook on RESET/DISCONNECT.
+volatile bool vcp_host_configured = false;
+
+// Forward decl: dtr_enable is the existing .bss flag defined below.
+extern volatile uint8_t dtr_enable;
+
 #ifdef CONFIG_USB_HS
 #define CDC_MAX_MPS 512
 #else
@@ -101,8 +110,29 @@ volatile bool ep_tx_busy_flag = false;
 
 void usbd_configure_done_callback(void)
 {
+    vcp_host_configured = true;
     /* setup first out ep read transfer */
     usbd_ep_start_read(CDC_OUT_EP, read_buffer, sizeof(read_buffer));
+}
+
+// CherryUSB invokes each interface's notify_handler on every lifecycle
+// event. We install this on intf0 (after the CDC class sets its own
+// handler) to clear our flags on RESET/DISCONNECT. Without this,
+// vcp_host_configured / dtr_enable would only ever transition false→true
+// and would not reflect a cable unplug.
+static void vcp_notify_handler(uint8_t event, void *arg)
+{
+    (void)arg;
+    switch (event) {
+        case USBD_EVENT_RESET:
+        case USBD_EVENT_DISCONNECTED:
+        case USBD_EVENT_SUSPEND:
+            vcp_host_configured = false;
+            dtr_enable = 0;
+            break;
+        default:
+            break;
+    }
 }
 
 void usbd_cdc_acm_bulk_out(uint8_t ep, uint32_t nbytes)
@@ -168,6 +198,11 @@ void cdc_acm_init(cdc_acm_rx_buf_t rx_buf)
     usbd_desc_register(cdc_descriptor);
     usbd_add_interface(usbd_cdc_acm_init_intf(&intf0));
     usbd_add_interface(usbd_cdc_acm_init_intf(&intf1));
+    // Override intf0's notify so we observe RESET/DISCONNECT/SUSPEND.
+    // CherryUSB iterates all interfaces' notify_handlers per event, so it's
+    // safe to overwrite this one without disturbing the CDC class behavior
+    // (the CDC handler is otherwise a no-op).
+    intf0.notify_handler = vcp_notify_handler;
     usbd_add_endpoint(&cdc_out_ep);
     usbd_add_endpoint(&cdc_in_ep);
     usbd_initialize();

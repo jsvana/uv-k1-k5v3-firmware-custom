@@ -92,6 +92,9 @@
 #endif
 
 #include "driver/uart.h"
+#ifdef ENABLE_USB
+    #include "driver/vcp.h"
+#endif
 static bool flagSaveVfo;
 static bool flagSaveSettings;
 static bool flagSaveChannel;
@@ -1433,6 +1436,25 @@ void APP_TimeSlice10ms(void)
         // SCHEDULER_Disable();
         UART_HandleCommand(UART_PORT_UART);
         // SCHEDULER_Enable();
+    }
+#endif
+
+#ifdef ENABLE_USB
+    // Trigger a status-bar redraw whenever USB enumeration or DTR state
+    // flips. Without this poll, plugging/unplugging the USB cable would not
+    // visibly update the "USB" indicator until something else dirtied the
+    // status line.
+    {
+        static bool s_usb_configured_prev = false;
+        static bool s_usb_dtr_prev = false;
+        bool usb_configured_now = VCP_IsHostConfigured();
+        bool usb_dtr_now = VCP_IsHostPortOpen();
+        if (usb_configured_now != s_usb_configured_prev ||
+            usb_dtr_now != s_usb_dtr_prev) {
+            s_usb_configured_prev = usb_configured_now;
+            s_usb_dtr_prev = usb_dtr_now;
+            gUpdateStatus = true;
+        }
     }
 #endif
 

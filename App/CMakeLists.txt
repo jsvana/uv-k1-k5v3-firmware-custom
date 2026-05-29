@@ -253,6 +253,10 @@ enable_feature(ENABLE_FEAT_F4HWN_LOGO)
 enable_feature(ENABLE_AGC_SHOW_DATA)
 enable_feature(ENABLE_UART_RW_BK_REGS)
 
+# ---- CAT CONTROL ----
+
+enable_feature(ENABLE_CAT_CONTROL)
+
 # ---- COMPILER/LINKER OPTIONS ----
 
 enable_feature(ENABLE_SWD)
