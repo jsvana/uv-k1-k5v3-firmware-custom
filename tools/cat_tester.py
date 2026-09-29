@@ -16,7 +16,7 @@ Użycie:
     python cat_tester.py --list-ports       # lista portów COM
 
 Komendy CAT testowane:
-    FA, FB, FR, TX, RX, MO, MD, PC, OF, CT, DT, SQ, OS, OV, ST, IF,
+    FA, FB, FR, TX, RX, MO, MD, PC, OF, CT, DT, SQ, OS, OV, ST, BL, IF,
     SM, S1, SL, SCF, SC, RD
 """
 
@@ -332,6 +332,26 @@ class CATTester:
             self._t("ST restore",   orig_step,   no_response=True)
         else:
             self._t("ST reset 12.5 kHz", "ST012500;", no_response=True)
+
+        # ────────────────────────────────────
+        self._section("5c. BL — Backlight (session only, no EEPROM write)")
+
+        self._t("BL read",            "BL;",    expect_prefix="BL")
+        self._t("BL1 on (key-like)",  "BL1;",   no_response=True)
+        time.sleep(0.15)
+        self._t("BL verify on",       "BL;",    expect_prefix="BL1")
+        self._t("BL1 brightness 05",  "BL105;", no_response=True)
+        time.sleep(0.15)
+        self._t("BL verify 05",       "BL;",    expect_contains="BL105;")
+        self._t("BL2 hold on",        "BL2;",   no_response=True)
+        time.sleep(0.15)
+        self._t("BL verify held on",  "BL;",    expect_prefix="BL1")
+        self._t("BL invalid 99",      "BL199;", no_response=True,
+                note="brightness out of 01..10 -> ignored")
+        self._t("BL0 off (release)",  "BL0;",   no_response=True)
+        time.sleep(0.15)
+        self._t("BL verify off",      "BL;",    expect_prefix="BL0")
+        self._t("BL1 restore",        "BL1;",   no_response=True)
 
         # ────────────────────────────────────
         self._section("6. Monitor (squelch override)")

@@ -753,6 +753,65 @@ static void Process_Kenwood_CAT(uint32_t Port)
         return;
     }
 
+    // BL — backlight control. Live/session only: nothing here is written to EEPROM.
+    // Read:  BL;             -> BL<state><brightness>;  state 1=on/0=off, brightness 00..10
+    // Set:   BL0;            -> turn off now (also releases a BL2 hold)
+    //        BL1;            -> turn on like a key press: BLTime countdown restarts, times out
+    //                           normally (no-op when the BLTime menu is 0/off, like the keypad)
+    //        BL1<2 digits>;  -> set brightness 01..10 (the BLMax menu range, index into the
+    //                           driver's value[] table) and turn on
+    //        BL2; BL2<nn>;   -> hold on until BL0;/BL1; using the radio's own "backlight on
+    //                           demand" state (gBackLight/gBacklightTimeOriginal): BLTime is
+    //                           forced to 61 in RAM only, SETTINGS_SaveSettings persists the
+    //                           original value while the hold is active.
+    // Sets do not reply. Brightness changes are faded in by BACKLIGHT_Update from the main loop.
+    if (strncmp(cat_buffer, "BL", 2) == 0) {
+        if (cat_buffer[2] == ';') {
+            char resp[8];
+            resp[0] = 'B'; resp[1] = 'L';
+            resp[2] = BACKLIGHT_IsOn() ? '1' : '0';
+            UIntToText(resp, BACKLIGHT_GetBrightness(), 2, 3);
+            resp[5] = ';'; resp[6] = 0;
+            UART_SendText(Port, resp);
+            return;
+        }
+
+        char    mode       = cat_buffer[2];
+        uint8_t brightness = 0;   // 0 = keep the radio's BLMax
+        if (cat_buffer[3] != ';') {
+            if (cat_pos < 6 || cat_buffer[5] != ';')
+                return;
+            brightness = (uint8_t)TextToUInt(cat_buffer, 3, 2);
+            if (brightness < 1 || brightness > 10)
+                return;
+        }
+
+        if (mode == '0') {
+            if (gBackLight) {
+                gEeprom.BACKLIGHT_TIME = gBacklightTimeOriginal;
+                gBackLight = false;
+            }
+            BACKLIGHT_TurnOff();
+            gUpdateStatus = true;
+        } else if (mode == '1' || mode == '2') {
+            if (mode == '2') {
+                if (!gBackLight) {
+                    gBacklightTimeOriginal = gEeprom.BACKLIGHT_TIME;
+                    gBackLight = true;
+                }
+                gEeprom.BACKLIGHT_TIME = 61;
+            } else if (gBackLight) {
+                gEeprom.BACKLIGHT_TIME = gBacklightTimeOriginal;
+                gBackLight = false;
+            }
+            BACKLIGHT_TurnOn();
+            if (brightness != 0 && BACKLIGHT_IsOn())
+                BACKLIGHT_SetBrightness(brightness);
+            gUpdateStatus = true;
+        }
+        return;
+    }
+
     // IF — informacja o bieżącym VFO (status transceivera)
     if (strncmp(cat_buffer, "IF;", 3) == 0) {
         char resp[40];
