@@ -16,7 +16,7 @@ Użycie:
     python cat_tester.py --list-ports       # lista portów COM
 
 Komendy CAT testowane:
-    FA, FB, FR, TX, RX, MO, MD, PC, OF, CT, DT, SQ, OS, OV, IF,
+    FA, FB, FR, TX, RX, MO, MD, PC, OF, CT, DT, SQ, OS, OV, ST, IF,
     SM, S1, SL, SCF, SC, RD
 """
 
@@ -312,6 +312,26 @@ class CATTester:
         self._t("OS reset",        "OS0;",           no_response=True)
         self._t("OV 600kHz",       "OV00000600000;", no_response=True,
                 note="600000 Hz = 600 kHz")
+
+        # ────────────────────────────────────
+        self._section("5b. ST — Frequency step of the active VFO")
+
+        orig_step = self.r.send("ST;")
+        self._t("ST read",          "ST;",       expect_prefix="ST")
+        self._t("ST set 5 kHz",     "ST005000;", no_response=True)
+        time.sleep(0.12)
+        self._t("ST verify 5 kHz",  "ST;",       expect_contains="ST005000;")
+        self._t("ST set 8.33 kHz",  "ST008330;", no_response=True)
+        time.sleep(0.12)
+        self._t("ST verify 8.33",   "ST;",       expect_contains="ST008330;")
+        self._t("ST invalid 7 kHz", "ST007000;", no_response=True,
+                note="not in step table -> ignored")
+        time.sleep(0.12)
+        self._t("ST still 8.33",    "ST;",       expect_contains="ST008330;")
+        if orig_step and orig_step.startswith("ST") and len(orig_step) >= 9:
+            self._t("ST restore",   orig_step,   no_response=True)
+        else:
+            self._t("ST reset 12.5 kHz", "ST012500;", no_response=True)
 
         # ────────────────────────────────────
         self._section("6. Monitor (squelch override)")

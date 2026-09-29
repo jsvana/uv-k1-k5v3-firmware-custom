@@ -49,6 +49,7 @@
 #ifdef ENABLE_CAT
     #include "dcs.h"
     #include "app/action.h"
+    #include "driver/system.h"
     #include "frequencies.h"
     #include "radio.h"
     #include "ui/ui.h"
@@ -714,6 +715,40 @@ static void Process_Kenwood_CAT(uint32_t Port)
             gEeprom.VfoInfo[gEeprom.TX_VFO].TX_OFFSET_FREQUENCY = offsetHz / 10;
             if (gTxVfo) gTxVfo->TX_OFFSET_FREQUENCY = offsetHz / 10;
             CAT_ApplyAndSave(false);
+        }
+        return;
+    }
+
+    // ST — frequency step of the active VFO (6 digits in Hz, e.g. ST012500; = 12.5 kHz)
+    // Read:  ST;               -> ST<6 digits Hz>;
+    // Set:   ST<6 digits Hz>;  -> no reply; ignored unless the value exactly matches an
+    //                             entry of gStepFrequencyTable (table is in units of 10 Hz).
+    // The set path re-saves and reloads the channel (like FA/MD/OV), so StepFrequency is
+    // refreshed and later FA/FB sets are rounded to the new step by RADIO_ConfigureChannel.
+    if (strncmp(cat_buffer, "ST", 2) == 0) {
+        if (cat_buffer[2] == ';') {
+            uint32_t stepHz = (uint32_t)gStepFrequencyTable[gEeprom.VfoInfo[gEeprom.TX_VFO].STEP_SETTING] * 10;
+            char resp[10];
+            resp[0] = 'S'; resp[1] = 'T';
+            UIntToText(resp, stepHz, 6, 2);
+            resp[8] = ';'; resp[9] = 0;
+            UART_SendText(Port, resp);
+        } else if (cat_pos >= 8) {
+            uint32_t stepHz = TextToUInt(cat_buffer, 2, 6);
+            for (uint8_t i = 0; i < STEP_N_ELEM; i++) {
+                if ((uint32_t)gStepFrequencyTable[i] * 10 != stepHz)
+                    continue;
+                if (gEeprom.VfoInfo[gEeprom.TX_VFO].STEP_SETTING != i) {
+                    gEeprom.VfoInfo[gEeprom.TX_VFO].STEP_SETTING  = i;
+                    gEeprom.VfoInfo[gEeprom.TX_VFO].StepFrequency = gStepFrequencyTable[i];
+                    if (gTxVfo) {
+                        gTxVfo->STEP_SETTING  = i;
+                        gTxVfo->StepFrequency = gStepFrequencyTable[i];
+                    }
+                    CAT_ApplyAndSave(false);
+                }
+                break;
+            }
         }
         return;
     }

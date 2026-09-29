@@ -46,6 +46,7 @@ All commands are transmitted as ASCII text strings over the serial port and must
 | **SQ** | `SQ[0-9];` e.g. `SQ5;` | *(none)* | **Squelch Level**: from `SQ0;` (open) to `SQ9;`. |
 | **OS** | `OS0;` / `OS1;` / `OS2;` | *(none)* | **Shift Direction (Offset)**: `0` = none (simplex), `1` = positive offset (+), `2` = negative offset (-). |
 | **OV** | `OV00000600000;` | *(none)* | **Frequency Offset Value**: 11 digits in Hz (e.g. `00000600000;` = 600 kHz). |
+| **ST** | `ST;`<br>`ST012500;` | `ST[6 digits Hz];`<br>*(none)* | **Frequency Step**: read (without argument) or set the active VFO's tuning step, 6 digits in Hz (e.g. `000010` = 10 Hz, `005000` = 5 kHz, `008330` = 8.33 kHz, `012500` = 12.5 kHz). Set values must exactly match one of the radio's step table entries (10 Hz ... 500 kHz); anything else is ignored. `FA`/`FB` sets are rounded to this step. |
 | **IF** | `IF;` | `IF[freq11]00000[mod][tx];` | **Transceiver Status**: returns current frequency, modulation, and TX/RX status. |
 | **S1** | `S1;` | `S1,[vfo],[dbm],[sq];` | **Instant RSSI Measurement**: immediate signal strength (dBm) and squelch status (0/1) for active VFO. |
 | **SM** | `SM[freq11];` | `SM[freq11],[dbm],[sq];` | **Fast Spot Frequency Measurement**: measures signal level on specified frequency without permanently altering VFO settings. |
